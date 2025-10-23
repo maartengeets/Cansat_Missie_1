@@ -131,7 +131,9 @@ void setup() {
   Serial.print( msg );
   Serial.println( "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
   Serial.println("Starting SD Card:");
-  ConnectSD();
+  while(!ConnectSD()){
+    Serial.println("Failed to connect with sd card reader!\n");
+  }
   Serial.printf( "Deleting file %s\n", FILE_NAME );
   deleteFile( SD, FILE_NAME );
   delay( 3000 );
