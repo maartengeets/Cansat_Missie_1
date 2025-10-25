@@ -130,6 +130,37 @@ void setup() {
   Serial.println();
   Serial.println("Verbonden met sd kaart!");
   Serial.println();
+
+  // versie beheer
+  const char *baseFile = "/CanSatSend.txt"; // zet de basefile als CanSatSend.txt
+
+  // Controleren of CanSatSend.txt bestaat
+  if (SD.exists(baseFile)) {
+    Serial.println("Bestand gevonden: CanSatSend.txt");
+
+    // Zoek naar eerstvolgende vrije versie
+    int version = 1;
+    char newFileName[40];
+
+    bool bezet = true;
+    while (bezet) {
+      snprintf(newFileName, sizeof(newFileName), "/CanSatSend_%04d.txt", version);
+      if (!SD.exists(newFileName)) {
+        bezet = false; // Deze bestandsnaam is nog vrij
+      }
+      version++;
+    }
+
+    // Hernoem het bestand
+    if (SD.rename(baseFile, newFileName)) {
+      Serial.printf("Bestand hernoemd naar: %s\n", newFileName);
+    } else {
+      Serial.println("Hernoemen mislukt!");
+    }
+
+  } else {
+    Serial.println("Geen bestand met de naam CanSatSend.txt gevonden.");
+  }
 }
 
 void loop() {
