@@ -4,7 +4,16 @@
 #include <WiFi.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BMP280.h>
+#include <FS.h>
+#include <SD.h>
+#include <SPI.h>
 #include <secrets.h> // secrets file invoegen
+
+// definieren van filename
+#define FILE_NAME "/Data.txt"
+
+// definieren van de sd cs pin
+#define SD_CSPIN  25
 
 // wificlient definieren
 WiFiClient wifiClient;
@@ -16,7 +25,7 @@ MqttClient mqttClient(wifiClient);
 // je kunt deze vinden op https://www.meteo.be/nl/weer/waarnemingen/belgie
 // als je dat doet, wordt de hoogte ongeveer correct berekend
 // een afwijking van ±8 m is normaal, omdat de sensor een afwijking heeft
-#define SEALEVELPRESSURE_HPA (1007.1)
+#define SEALEVELPRESSURE_HPA (1002.5)
 
 #define BMP280_ADR  0x76 // zet I2C address van de BMP280 sensor
                          // sommige sensoren gebruiken het adress 0x77 
@@ -41,6 +50,8 @@ void printValues();
 String csv_string_data();
 void mqtt_pub_csv(const char *topic, String str_csv);
 bool I2C_check(TwoWire *bus, byte address);
+void appendFile(fs::FS &fs, const char * path, const char * message);
+int  ConnectSD();
 
 void setup() {
   // initialiseren van de seriele poort en wachten tot het opent
@@ -110,6 +121,14 @@ void setup() {
   // bmp succesvol verbonden
   Serial.println();
   Serial.println( "BMP280 succesvol verbonden!" );
+  Serial.println();
+
+  // verbinden met sd kaart
+  Serial.println("Verbinden met sd kaart");
+  ConnectSD();
+  Serial.println();
+  Serial.println("Verbonden met sd kaart!");
+  Serial.println();
 }
 
 void loop() {
@@ -118,6 +137,8 @@ void loop() {
   // var definieren waar csv in komt
   String data = ""; 
 
+  char msg[100] = "";
+
   // check of de BMP280 sensor nog steeds verbonden is door I2C communicatie te testen
   bmp_connected = I2C_check(&I2Ctwo, BMP280_ADR);
 
@@ -125,6 +146,9 @@ void loop() {
       printValues();
       data = csv_string_data(); // zet de csv in de var data
       mqtt_pub_csv(TOPIC,data); // publiceert de data (csv) op mqtt broker
+      data = data +"\n";
+      data.toCharArray(msg,100); // zet de csv string om naar een char lijst
+      appendFile(SD, FILE_NAME, msg); // zet data in het bestand met de naam FILE_NAME
   } else {
       Serial.println("ERROR: BMP280 sensor not found!");
   }
@@ -185,4 +209,61 @@ bool I2C_check(TwoWire *bus, byte address) {
     bus->beginTransmission(address);    // start communicatie met I2C apparaat
     byte error = bus->endTransmission(); // beëindig communicatie en krijg foutcode
     return (error == 0);                // true als geen fout (error=0)
+}
+
+// functie die een message zet in een bestand
+void appendFile(fs::FS &fs, const char * path, const char * message){
+  Serial.printf("Sturen naar bestand: %s\n", path);
+
+  File file = fs.open(path, FILE_APPEND);
+  if(!file){
+    Serial.println("Openen van het bestand mislukt!");
+    return;
+  }
+  if(file.print(message)){
+      Serial.print( message );
+  } else {
+    Serial.println("Sturen mislukt");
+  }
+  file.close();
+}
+
+// functie die verbind met de sd kaart
+int ConnectSD() {
+    // initialiseert de SD kaart
+    Serial.print("Initializeren van SD card...");
+    
+    // blijft proberen te verbinden met de SD kaart totdat het lukt
+    while (!SD.begin( SD_CSPIN )) {
+        Serial.print(".");
+        delay( 50 );
+    }
+    Serial.println("initializeren gelukt.");
+
+    // Bepaalt het type SD kaart
+    uint8_t cardType = SD.cardType();
+
+    // controleert of er een SD kaart aanwezig is
+    if(cardType == CARD_NONE){
+        Serial.println("Geen SD card geconnecteerd!");
+        return( -1);  // Geeft -1 terug als er geen kaart gevonden is
+    }
+
+    // print het type SD kaart
+    Serial.print("SD Card Type: ");
+    if(cardType == CARD_MMC){
+        Serial.println("MMC");
+    } else if(cardType == CARD_SD){
+        Serial.println("SDSC");
+    } else if(cardType == CARD_SDHC){
+        Serial.println("SDHC");
+    } else {
+        Serial.println("ONBEKEND");
+    }
+
+    // Berekent en print de grootte van de SD kaart in MB
+    uint64_t cardSize = SD.cardSize() / (1024 * 1024);
+    Serial.printf("SD Card Grootte: %lluMB\n", cardSize);
+
+    return 0;  // Geeft 0 terug als alles succesvol is
 }
