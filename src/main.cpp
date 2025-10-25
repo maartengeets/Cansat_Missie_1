@@ -10,7 +10,7 @@
 #include <secrets.h> // secrets file invoegen
 
 // definieren van filename
-#define FILE_NAME "/Data.txt"
+#define FILE_NAME "/CanSatSend.txt"
 
 // definieren van de sd cs pin
 #define SD_CSPIN  25
@@ -52,6 +52,7 @@ void mqtt_pub_csv(const char *topic, String str_csv);
 bool I2C_check(TwoWire *bus, byte address);
 void appendFile(fs::FS &fs, const char * path, const char * message);
 int  ConnectSD();
+bool checkSDConnection();
 
 void setup() {
   // initialiseren van de seriele poort en wachten tot het opent
@@ -148,7 +149,9 @@ void loop() {
       mqtt_pub_csv(TOPIC,data); // publiceert de data (csv) op mqtt broker
       data = data +"\n";
       data.toCharArray(msg,100); // zet de csv string om naar een char lijst
-      appendFile(SD, FILE_NAME, msg); // zet data in het bestand met de naam FILE_NAME
+      if(checkSDConnection()){ // kijkt of de sd kaart verbonden is
+        appendFile(SD, FILE_NAME, msg); // zet data in het bestand met de naam FILE_NAME
+      }
   } else {
       Serial.println("ERROR: BMP280 sensor not found!");
   }
@@ -266,4 +269,24 @@ int ConnectSD() {
     Serial.printf("SD Card Grootte: %lluMB\n", cardSize);
 
     return 0;  // Geeft 0 terug als alles succesvol is
+}
+
+// functie die de sd kaart connectie test
+bool checkSDConnection() {
+    uint8_t cardType = SD.cardType();
+    
+    if(cardType == CARD_NONE) {
+        Serial.println("SD kaart niet gevonden!");
+        return false;
+    }
+    
+    // Test of we kunnen schrijven naar de kaart
+    File testFile = SD.open("/test.txt", FILE_WRITE);
+    if(!testFile) {
+        Serial.println("SD kaart schrijf test mislukt!");
+        return false;
+    }
+    testFile.close();
+    
+    return true;
 }
